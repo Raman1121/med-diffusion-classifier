@@ -10,8 +10,8 @@
     <img src="https://img.shields.io/badge/arXiv-2410.05203-b31b1b.svg?style=flat" /></a>
 <a href="https://faverogian.github.io/med-diffusion-classifier.github.io/" alt="webpage">
     <img src="https://img.shields.io/badge/Webpage-darkviolet" /></a>
-<img src="https://img.shields.io/github/license/faverogian/diffusion-classifier" />
-<img src="https://views.whatilearened.today/views/github/faverogian/diffusion-classifier.svg" />
+<img src="https://img.shields.io/github/license/faverogian/med-diffusion-classifier" />
+<img src="https://views.whatilearened.today/views/github/faverogian/med-diffusion-classifier.svg" />
   
 <p align="center">
 <picture>
@@ -199,6 +199,8 @@ pip install git+https://github.com/huggingface/diffusers
 The output directory for the Stable Diffusion model can be set in its `train.sh` script, while other models will save their checkpoints within their respective experiment folders.
 
 ## License
+
+This project is licensed under the MIT License. See the LICENSE file for details.
 
 ## Citation
 

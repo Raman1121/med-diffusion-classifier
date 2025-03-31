@@ -1,5 +1,7 @@
 from comet_ml import Experiment, ExistingExperiment
 from diffusers import AutoencoderKL, UNet2DConditionModel, DDPMScheduler, StableDiffusionPipeline, EulerDiscreteScheduler
+from transformers import AutoModel, AutoTokenizer
+
 import torch
 import torch.nn as nn
 from torch.special import expm1
@@ -8,7 +10,7 @@ from accelerate import Accelerator
 import os
 import sys
 from tqdm import tqdm
-from ema_pytorch import EMA
+# from ema_pytorch import EMA
 import time
 import matplotlib.pyplot as plt
 
@@ -38,8 +40,8 @@ class StableDiffusionClassifier(nn.Module):
         self.version = config.version
         self.model_path = config.model_path    
         if self.model_path is not None and self.model_path != "":
-            assert os.path.exists(self.model_path), f"Model path {self.model_path} does not exist."
-
+            if("radedit" not in self.model_path):
+                assert os.path.exists(self.model_path), f"Model path {self.model_path} does not exist."
             self.model_id = self.model_path
         else:
             assert self.version in MODEL_IDS.keys()
@@ -49,6 +51,8 @@ class StableDiffusionClassifier(nn.Module):
         self.vae, self.tokenizer, self.text_encoder, self.unet, self.scheduler = self.get_sd_model(config.mixed_precision)
 
         self.label_to_text_mapper = label_to_text_mapper
+
+        print("MODEL ID: ", self.model_id)
 
     def get_sd_model(self, dtype):
         assert dtype in ['fp32', 'fp16']
@@ -60,10 +64,48 @@ class StableDiffusionClassifier(nn.Module):
         else:
             raise NotImplementedError
         
-        scheduler = EulerDiscreteScheduler.from_pretrained(self.model_id, subfolder="scheduler")
-        
-        pipe = StableDiffusionPipeline.from_pretrained(self.model_id if self.model_path is None or self.model_path=="" else self.model_path, scheduler=scheduler, torch_dtype=dtype)
-        pipe.enable_xformers_memory_efficient_attention()
+        if("radedit" in self.model_id):
+            unet = UNet2DConditionModel.from_pretrained("microsoft/radedit", subfolder="unet")
+            vae = AutoencoderKL.from_pretrained("stabilityai/sdxl-vae")
+            text_encoder = AutoModel.from_pretrained(
+                "microsoft/BiomedVLP-BioViL-T",
+                trust_remote_code=True,
+            )
+            tokenizer = AutoTokenizer.from_pretrained(
+                "microsoft/BiomedVLP-BioViL-T",
+                model_max_length=128,
+                trust_remote_code=True,
+            )
+            scheduler = EulerDiscreteScheduler(
+                beta_schedule="scaled_linear", 
+                prediction_type="epsilon", 
+                timestep_spacing="trailing", 
+                steps_offset=1
+                )
+            pipe = StableDiffusionPipeline(
+                vae=vae,
+                text_encoder=text_encoder,
+                tokenizer=tokenizer,
+                unet=unet,
+                scheduler=scheduler,
+                safety_checker=None,
+                requires_safety_checker=False,
+                feature_extractor=None,
+            )
+            pipe.enable_xformers_memory_efficient_attention()
+
+            print("DTYPE: ", pipe.dtype)
+            
+        else:
+            scheduler = EulerDiscreteScheduler.from_pretrained(self.model_id, subfolder="scheduler")
+            
+            pipe = StableDiffusionPipeline.from_pretrained(self.model_id if self.model_path is None or self.model_path=="" else self.model_path, scheduler=scheduler, torch_dtype=dtype)
+            pipe.enable_xformers_memory_efficient_attention()
+
+            vae = pipe.vae
+            tokenizer = pipe.tokenizer
+            text_encoder = pipe.text_encoder
+            unet = pipe.unet
 
         # Loading directly from a checkpoint
         # from safetensors.torch import load_file
@@ -71,11 +113,6 @@ class StableDiffusionClassifier(nn.Module):
         # pipe.unet.load_state_dict(state_dict)
 
         pipe.to("cuda")
-        
-        vae = pipe.vae
-        tokenizer = pipe.tokenizer
-        text_encoder = pipe.text_encoder
-        unet = pipe.unet
 
         return vae, tokenizer, text_encoder, unet, scheduler
     
@@ -120,9 +157,15 @@ class StableDiffusionClassifier(nn.Module):
         """
         text_input = self.tokenizer(text, padding="max_length",
                                max_length=self.tokenizer.model_max_length, truncation=True, return_tensors="pt")
-        text_embeddings = self.text_encoder(
-                text_input.input_ids.to(self.unet.device),
-            )[0]
+        if("radedit" in self.model_id):
+            text_embeddings = self.text_encoder(
+                    text_input.input_ids.to(self.unet.device),
+                    attention_mask=text_input.attention_mask.to(self.unet.device)
+                )[0]
+        else:
+            text_embeddings = self.text_encoder(
+                    text_input.input_ids.to(self.unet.device),
+                )[0]
         
         return text_embeddings
     
@@ -308,6 +351,7 @@ class StableDiffusionClassifier(nn.Module):
                 for c in range(classes.shape[1]):
                     labels = classes[:, c]
                     text = self.label_to_text_mapper(labels)
+                    
                     text_embeddings = self.encode_text_prompt(text)
                     
                     pred = self.unet(z_t, t_input, encoder_hidden_states=text_embeddings).sample

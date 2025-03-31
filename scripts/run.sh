@@ -1,6 +1,6 @@
-export PROJECT_ROOT=""                  # Path to diffusion-classifier repository
-export DATA_ROOT=""                    # Path to the data directory containing chexpert and mel_isic_balanced  
-export INFERENCE_CHECKPOINT_FOLDER=""  # Checkpoint folder for inference
+export PROJECT_ROOT="/raid/s2198939/med-diffusion-classifier"   # Path to diffusion-classifier repository
+export DATA_ROOT="/raid/s2198939/med-diffusion-classifier/data" # Path to the data directory containing chexpert and mel_isic_balanced  
+export INFERENCE_CHECKPOINT_FOLDER="/raid/s2198939/med-diffusion-classifier/final-models" # Checkpoint folder for inference
 
 export COMET_PROJECT_NAME="diffusion-classifier"  
 export COMET_WORKSPACE=""
@@ -9,7 +9,7 @@ export COMET_EXPERIMENT_NAME=""
 export USE_COMET=0
 
 export MODEL="sd"                           # "baseline", "unet", "dit", "sd"
-export FUNCTION="train"                        # "train", "inference", "explain"
+export FUNCTION="inference"                        # "train", "inference", "explain"
 export DATA="chexpert"                            # "chexpert", "isic"
 
 # For the baseline

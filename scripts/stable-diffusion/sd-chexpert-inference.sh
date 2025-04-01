@@ -31,7 +31,9 @@ export MODEL_PATH="$INFERENCE_CHECKPOINT_FOLDER/stable-diffusion/"       # (str)
 # export MODEL_PATH="radedit" 
 
 
-export SENS_ATTR="None"
+# export SENS_ATTR="None"
+# export SENS_ATTR="Age_Binary"
+export SENS_ATTR="Sex"
 
 export CONFIG="{
   \"project_root\": \"$PROJECT_ROOT\",

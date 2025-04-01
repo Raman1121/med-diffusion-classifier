@@ -5,7 +5,7 @@ export INFERENCE_CHECKPOINT_FOLDER="/raid/s2198939/med-diffusion-classifier/fina
 
 export COMET_PROJECT_NAME="diffusion-classifier"  
 export COMET_WORKSPACE="diffusion-classifier"
-export COMET_API_KEY="AhxENHiqlnNcDf3lTj9dhKWBY"
+export COMET_API_KEY=""
 export COMET_EXPERIMENT_NAME="diffusion-classifier-fairness"         
 export USE_COMET=1
 

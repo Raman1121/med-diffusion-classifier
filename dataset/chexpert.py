@@ -7,7 +7,7 @@ from torchvision import transforms
 from utils.wavelet import wavelet_dec_2
 
 class CheXpertDataset(Dataset):
-    def __init__(self, data_path, split="train", wavelet_transform=False, image_size=(256,256), augment=False):
+    def __init__(self, data_path, split="train", wavelet_transform=False, image_size=(256,256), augment=False, sens_attr=None):
         """
         Args:
             data_path (str): Path to the CheXpert dataset.
@@ -25,16 +25,23 @@ class CheXpertDataset(Dataset):
         self.image_size = image_size
         self.augment = augment
 
+        self.sens_attr = sens_attr
+
         # Get images path
         self.img_dir = os.path.join(self.data_path, "train")
 
         # Check the dataset split and apply filtering accordingly
         if split == "train": # Take first 80% of the data
-            self.data = pl.read_csv("dataset/splits/chexpert-train.csv")
+            # self.data = pl.read_csv("dataset/splits/chexpert-train.csv")
+            self.data = pl.read_csv("dataset/splits/chexpert-train-with-metadata.csv")
+
         elif split == "valid": # Take first half of last 20%) of the data
-            self.data = pl.read_csv("dataset/splits/chexpert-valid.csv")
+            # self.data = pl.read_csv("dataset/splits/chexpert-valid.csv")
+            self.data = pl.read_csv("dataset/splits/chexpert-valid-with-metadata.csv")
+
         elif split == "test": # Take second half of last 20% of the data
-            self.data = pl.read_csv("dataset/splits/chexpert-test.csv")
+            self.data = pl.read_csv("dataset/splits/chexpert-test1.csv")
+            # self.data = pl.read_csv("dataset/splits/chexpert-test-with-metadata.csv")
 
         # Print length of dataset
         print(f"Dataset length: {len(self.data)}")
@@ -117,10 +124,21 @@ class CheXpertDataset(Dataset):
     def __getitem__(self, idx):
         # Get row data
         row = self.data[idx]
-        rel_path = row["Path"].item().split("/")[1:]
-        rel_path = os.path.join(*rel_path)
-        img_path = os.path.join(self.data_path, rel_path)
+        # rel_path = row["Path"].item().split("/")[1:]
+        # rel_path = os.path.join(*rel_path)
+        # img_path = os.path.join(self.data_path, rel_path)
+        img_path = os.path.join(self.data_path, row["Path"].item())
         label = int(row["Pleural Effusion"].item())
+
+        try:
+            sens_attr = row[self.sens_attr].item()
+        except:
+            sens_attr = None
+        
+        try:
+            prompt_with_metadata = row["prompt_with_metadata"].item()
+        except:
+            prompt_with_metadata = None
 
         # Load image
         image = Image.open(img_path).convert("RGB")
@@ -131,18 +149,20 @@ class CheXpertDataset(Dataset):
         if self.wavelet_transform:
             image = wavelet_dec_2(image) / 2
 
-        return image, label #, rel_path
+        return image, label, prompt_with_metadata, sens_attr
     
 class CheXpertDataLoader:
-    def __init__(self, wavelet_transform, data_path, batch_size=64, num_workers=4, image_size=(256,256), cf_label=None, augment=False):
+    def __init__(self, wavelet_transform, data_path, batch_size=64, num_workers=4, image_size=(256,256), cf_label=None, augment=False, sens_attr=None):
         self.data_path = data_path
         self.batch_size = batch_size
         self.num_workers = num_workers
         self.cf_label = cf_label
+        
+        self.sens_attr = sens_attr
 
-        self.train_dataset = CheXpertDataset(data_path=self.data_path, split="train", image_size=image_size, wavelet_transform=wavelet_transform, augment=augment)
-        self.val_dataset = CheXpertDataset(data_path=self.data_path, split="valid", image_size=image_size, wavelet_transform=wavelet_transform, augment=augment)
-        self.test_dataset = CheXpertDataset(data_path=self.data_path, split="test", image_size=image_size, wavelet_transform=wavelet_transform, augment=augment)
+        self.train_dataset = CheXpertDataset(data_path=self.data_path, split="train", image_size=image_size, wavelet_transform=wavelet_transform, augment=augment, sens_attr=sens_attr)
+        self.val_dataset = CheXpertDataset(data_path=self.data_path, split="valid", image_size=image_size, wavelet_transform=wavelet_transform, augment=augment, sens_attr=sens_attr)
+        self.test_dataset = CheXpertDataset(data_path=self.data_path, split="test", image_size=image_size, wavelet_transform=wavelet_transform, augment=augment, sens_attr=sens_attr)
 
         # Initialize DataLoaders
         self.train_loader = DataLoader(
@@ -177,16 +197,27 @@ class CheXpertDataLoader:
 
     def collate_fn(self, batch):
         # Extract the images and labels from the batch
-        images, labels = zip(*batch)
+        images, labels, prompt_with_metadata, sens_attr = zip(*batch)
 
         if self.cf_label is not None:
             # Make all labels the cf_label
             labels = [self.cf_label for _ in labels]
 
-        return {
-            "images": torch.stack(images),
-            "prompt": torch.tensor(labels),
-        }
+        # print("SENS ATTR: ", sens_attr)
+        
+        if(self.sens_attr is None):
+            return {
+                "images": torch.stack(images),
+                "prompt": torch.tensor(labels),
+                "prompt_with_metadata": prompt_with_metadata
+            }
+        else:
+            return {
+                "images": torch.stack(images),
+                "prompt": torch.tensor(labels),
+                "prompt_with_metadata": prompt_with_metadata,
+                "sens_attr": torch.tensor(sens_attr)
+            }
 
     def get_train_loader(self):
         return self.train_loader

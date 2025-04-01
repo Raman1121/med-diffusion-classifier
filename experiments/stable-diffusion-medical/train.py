@@ -18,6 +18,7 @@ import argparse
 import logging
 import math
 import os
+import pandas as pd
 import random
 import shutil
 from contextlib import nullcontext
@@ -57,7 +58,7 @@ if is_wandb_available():
 
 
 # Will error if the minimal version of diffusers is not installed. Remove at your own risks.
-check_min_version("0.33.0.dev0")
+# check_min_version("0.33.0.dev0")
 
 logger = get_logger(__name__, log_level="INFO")
 
@@ -725,6 +726,7 @@ def main():
 
     # In distributed training, the load_dataset function guarantees that only one local process can concurrently
     # download the dataset.
+
     if args.dataset_name is not None:
         # Downloading and loading a dataset from the hub.
         dataset = load_dataset(
@@ -748,6 +750,15 @@ def main():
     # Preprocessing the datasets.
     # We need to tokenize inputs and targets.
     column_names = dataset["train"].column_names
+    print("Length of the dataset: ", len(dataset["train"]))
+
+    # Creating validation prompts
+    if args.validation_prompts is None:
+        val_csv = pd.read_csv("/raid/s2198939/med-diffusion-classifier/dataset/splits/chexpert-valid-with-metadata.csv")
+        args.validation_prompts = val_csv["prompt_with_metadata"].tolist()
+        # Sample 10 prompts
+        args.validation_prompts = random.sample(args.validation_prompts, 10)
+
 
     # 6. Get the column names for input/target.
     dataset_columns = DATASET_NAME_MAPPING.get(args.dataset_name, None)

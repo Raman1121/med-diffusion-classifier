@@ -1,5 +1,6 @@
 export EXPERIMENT_DIR="/experiments/chexpert-stable-diffusion"
 export DATA_PATH="$DATA_ROOT/chexpert"          # Path to the chexpert data directory
+# export DATA_PATH="$DATA_ROOT/chexpert_new/test"
 export SEED=42
 
 # Data parameters
@@ -21,9 +22,16 @@ export N_KEEP_PER_STAGE=[1]             # (list) Number of classes to keep per s
 
 # Model parameters
 export VERSION="2-0"
-# export INFERENCE_CHECKPOINT_FOLDER="/raid/s2198939/med-diffusion-classifier/final-models"
-# export MODEL_PATH="$INFERENCE_CHECKPOINT_FOLDER/stable-diffusion/"       # (str) Path to the stable diffusion model
-export MODEL_PATH="radedit" 
+export INFERENCE_CHECKPOINT_FOLDER="/raid/s2198939/med-diffusion-classifier/final-models"
+export MODEL_PATH="$INFERENCE_CHECKPOINT_FOLDER/stable-diffusion/"       # (str) Path to the stable diffusion model
+
+# export INFERENCE_CHECKPOINT_FOLDER="/raid/s2198939/med-diffusion-classifier/sd_chexpert_finetuning_output"
+# export MODEL_PATH="$INFERENCE_CHECKPOINT_FOLDER"       # (str) Path to the stable diffusion model
+
+# export MODEL_PATH="radedit" 
+
+
+export SENS_ATTR="None"
 
 export CONFIG="{
   \"project_root\": \"$PROJECT_ROOT\",
@@ -43,8 +51,10 @@ export CONFIG="{
   \"n_keep_per_stage\": $N_KEEP_PER_STAGE,
   \"majority_voting\": $MAJORITY_VOTING,
   \"version\": \"$VERSION\",
-  \"model_path\": \"$MODEL_PATH\"
+  \"model_path\": \"$MODEL_PATH\",
+  \"sens_attr\": \"$SENS_ATTR\"
 }"
+
 
 port=$(shuf -i 1025-65535 -n 1)
 accelerate launch \

@@ -2,6 +2,13 @@ from typing import Sequence
 import torch
 import numpy as np
 
+from fairlearn.metrics import (
+    equalized_odds_difference,
+    equalized_odds_ratio,
+    demographic_parity_difference,
+    demographic_parity_ratio,
+)
+
 class Metric(torch.nn.Module):
     def __init__(self, name, device=torch.device("cpu")):
         super().__init__()
@@ -59,6 +66,73 @@ class Accuracy(Metric):
 
     def compute(self):
         return {self.name:self.correct / self.total}
+
+    def get_output(self, reduce=True):
+        return self.compute()
+    
+class DPD(Metric):
+    def __init__(self, name="DPD", device=torch.device("cpu")):
+        super().__init__(name, device)
+        # self.correct = torch.tensor(0)
+        # self.total = torch.tensor(0)
+        self.dpd = torch.tensor(0, dtype=torch.float16)
+        self.device = device
+    
+    def reset(self):
+        # self.correct = torch.tensor(0, device=self.device)
+        # self.total = torch.tensor(0, device=self.device)
+        self.dpd = torch.tensor(0, device=self.device)
+
+    def set_device(self, device):
+        self.device = device
+        # self.correct = self.correct.to(device)
+        # self.total = self.total.to(device)
+        self.dpd = self.dpd.to(device)
+
+    def update(self, output):
+        y_pred, batch = output
+        y_true = batch['prompt']
+        sens_attr = batch['sens_attr']
+
+        _dpd = round(demographic_parity_difference(y_true.cpu(), y_pred.cpu(), sensitive_features=sens_attr.cpu()), 4)
+        
+        self.dpd += _dpd
+    
+    def sync_across_processes(self, accelerator):
+        self.dpd = accelerator.reduce(self.dpd)
+
+    def compute(self):
+        return self.dpd
+
+    def get_output(self, reduce=True):
+        return self.compute()
+    
+class EOD(Metric):
+    def __init__(self, name="EOD", device=torch.device("cpu")):
+        super().__init__(name, device)
+        self.eod = torch.tensor(0, dtype=torch.float16)
+        self.device = device
+    
+    def reset(self):
+        self.eod = torch.tensor(0, device=self.device)
+
+    def set_device(self, device):
+        self.device = device
+        self.eod = self.eod.to(device)
+
+    def update(self, output):
+        y_pred, batch = output
+        y_true = batch['prompt']
+        sens_attr = batch['sens_attr']
+
+        _eod = round(equalized_odds_difference(y_true.cpu(), y_pred.cpu(), sensitive_features=sens_attr.cpu()), 4)
+        self.eod += _eod
+
+    def sync_across_processes(self, accelerator):
+        self.eod = accelerator.reduce(self.eod)
+
+    def compute(self):
+        return self.eod
 
     def get_output(self, reduce=True):
         return self.compute()

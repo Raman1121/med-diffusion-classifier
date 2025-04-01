@@ -1,6 +1,7 @@
 from comet_ml import Experiment, ExistingExperiment
 from diffusers import AutoencoderKL, UNet2DConditionModel, DDPMScheduler, StableDiffusionPipeline, EulerDiscreteScheduler
 from transformers import AutoModel, AutoTokenizer
+import numpy as np
 
 import torch
 import torch.nn as nn
@@ -10,7 +11,7 @@ from accelerate import Accelerator
 import os
 import sys
 from tqdm import tqdm
-# from ema_pytorch import EMA
+from ema_pytorch import EMA
 import time
 import matplotlib.pyplot as plt
 
@@ -231,8 +232,11 @@ class StableDiffusionClassifier(nn.Module):
 
             x = batch["images"]
             p = batch["prompt"] if "prompt" in batch.keys() else None
+            text_prompt = batch["prompt_with_metadata"]
+
+            # sens_attr = batch["sens_attr"] if "sens_attr" in batch.keys() else None
             
-            sample = self.classify(x, p, majority=self.config.majority_voting)
+            sample = self.classify(x, p, text_prompt, majority=self.config.majority_voting)
                         
             # Update the metrics
             if metrics is not None:
@@ -301,18 +305,8 @@ class StableDiffusionClassifier(nn.Module):
         return (metric_output, val_samples, batches) if metrics is not None else (val_samples, batches)
     
     @torch.no_grad()
-    def classify(self, x, text=None, majority=True):
-        """
-        Function to classify the input tensor x.
-
-        Args:
-        x (torch.Tensor): The input tensor to classify.
-        text (str): The text prompt to use.
-        majority (bool): Whether to use majority voting or average voting.
-
-        Returns:
-        classes (torch.Tensor): The predicted classes.
-        """
+    def classify(self, x, text=None, text_prompt=None, majority=True):
+        
         assert len(self.config.evaluation_per_stage) == self.config.n_stages, "Number of evaluations per stage must match the number of stages."
         assert len(self.config.n_keep_per_stage) == self.config.n_stages, "Number of classes to keep per stage must match the number of stages."
         assert self.config.n_keep_per_stage[-1] == 1, "Only one class should be selected at the end of the classification process."
@@ -350,10 +344,24 @@ class StableDiffusionClassifier(nn.Module):
                 # Get the errors for each class
                 for c in range(classes.shape[1]):
                     labels = classes[:, c]
-                    text = self.label_to_text_mapper(labels)
                     
-                    text_embeddings = self.encode_text_prompt(text)
-                    
+                    """
+                    NOTE:
+                    Previously, the model was creating the text prompt on the fly according to the diagnosis label
+                    Now, we return the label and the text prompt separately from the dataloader
+                    because the text prompt now contains metadata (Age, Sex)
+                    """
+
+                    are_all_elements_none = np.all([x is None for x in np.array(text_prompt)])
+
+                    if(are_all_elements_none and text is not None):
+                        # This means we are using the defaul setting given in the original codebase
+                        assert self.label_to_text_mapper is not None
+                        text = self.label_to_text_mapper(labels)
+                        text_embeddings = self.encode_text_prompt(text)
+                    else:
+                        text_embeddings = self.encode_text_prompt(text_prompt)
+                        
                     pred = self.unet(z_t, t_input, encoder_hidden_states=text_embeddings).sample
                     eps_pred = pred
 
